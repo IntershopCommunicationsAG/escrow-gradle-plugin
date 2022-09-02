@@ -109,6 +109,11 @@ tasks {
 
     withType<Test>().configureEach {
         systemProperty("intershop.gradle.versions", "7.2")
+
+        testLogging {
+            showStandardStreams = true
+        }
+
         useJUnitPlatform()
 
         dependsOn("jar")
