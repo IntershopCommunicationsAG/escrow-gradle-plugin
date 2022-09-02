@@ -35,8 +35,7 @@ open class EscrowPlugin: Plugin<Project> {
                     EscrowExtension::class.java
                 ) ?: extensions.create(
                     EscrowExtension.ESCROW_EXTENSION_NAME,
-                    EscrowExtension::class.java,
-                    project
+                    EscrowExtension::class.java
                 )
 
                 project.afterEvaluate {
