@@ -206,9 +206,6 @@ publishing {
         create("intershopMvn", MavenPublication::class.java) {
 
             from(components["java"])
-            artifact(tasks.getByName("sourceJar"))
-            artifact(tasks.getByName("javaDoc"))
-
             artifact(File(buildDir, "docs/asciidoc/html5/README.html")) {
                 classifier = "reference"
             }
