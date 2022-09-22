@@ -69,7 +69,7 @@ pluginBundle {
     val pluginURL = "https://github.com/IntershopCommunicationsAG/${project.name}"
     website = pluginURL
     vcsUrl = pluginURL
-    tags = listOf("intershop", "gradle", "plugin", "build")
+    tags = listOf("intershop", "build", "escow", "packaging")
     pluginTags = mapOf(
         "escrowPlugin" to listOf("escrow", "release")
     )
@@ -102,13 +102,8 @@ detekt {
 }
 
 tasks {
-
-    withType<KotlinCompile> {
-        kotlinOptions.jvmTarget = "1.8"
-    }
-
     withType<Test>().configureEach {
-        systemProperty("intershop.gradle.versions", "7.2")
+        systemProperty("intershop.gradle.versions", "7.2,7.5.1")
 
         testLogging {
             showStandardStreams = true
@@ -119,7 +114,7 @@ tasks {
         dependsOn("jar")
     }
 
-    val copyAsciiDoc = register<Copy>("copyAsciiDoc") {
+    register<Copy>("copyAsciiDoc") {
         includeEmptyDirs = false
 
         val outputDir = file("$buildDir/tmp/asciidoctorSrc")
@@ -140,7 +135,7 @@ tasks {
     }
 
     withType<AsciidoctorTask> {
-        dependsOn(copyAsciiDoc)
+        dependsOn("copyAsciiDoc")
 
         setSourceDir(file("$buildDir/tmp/asciidoctorSrc"))
         sources(delegateClosureOf<PatternSet> {
@@ -167,10 +162,10 @@ tasks {
 
     withType<JacocoReport> {
         reports {
-            xml.getRequired().set(true)
-            html.getRequired().set(true)
+            xml.required.set(true)
+            html.required.set(true)
 
-            html.getOutputLocation().set( File(project.buildDir, "jacocoHtml") )
+            html.outputLocation.set( File(project.buildDir, "jacocoHtml") )
         }
 
         val jacocoTestReport by tasks
@@ -179,7 +174,7 @@ tasks {
 
     getByName("jar").dependsOn("asciidoctor")
 
-    val compileKotlin by getting(KotlinCompile::class) {
+    withType<KotlinCompile>  {
         kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8.toString()
     }
 
@@ -187,17 +182,21 @@ tasks {
         outputDirectory.set(buildDir.resolve("dokka"))
     }
 
-    register<Jar>("sourceJar") {
-        description = "Creates a JAR that contains the source code."
-
-        from(sourceSets.getByName("main").allSource)
-        archiveClassifier.set("sources")
+    withType<Sign> {
+        val sign = this
+        withType<PublishToMavenLocal> {
+            this.dependsOn(sign)
+        }
+        withType<PublishToMavenRepository> {
+            this.dependsOn(sign)
+        }
     }
 
-    register<Jar>("javaDoc") {
-        dependsOn(dokkaJavadoc)
-        from(dokkaJavadoc)
-        archiveClassifier.set("javadoc")
+    afterEvaluate {
+        getByName<Jar>("javadocJar") {
+            dependsOn(dokkaJavadoc)
+            from(dokkaJavadoc)
+        }
     }
 }
 
@@ -266,12 +265,11 @@ dependencies {
     implementation(gradleApi())
     implementation(localGroovy())
 
-    testImplementation("com.intershop.gradle.test:test-gradle-plugin:4.1.1")
+    testImplementation("com.intershop.gradle.test:test-gradle-plugin:4.1.2")
     testImplementation(gradleTestKit())
 }
 
 repositories {
-    mavenLocal()
     mavenCentral()
     maven {
         url = uri("https://plugins.gradle.org/m2/")
