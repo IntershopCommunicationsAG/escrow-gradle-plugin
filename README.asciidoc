@@ -1,10 +1,10 @@
 = Escrow Package Plugin
-:latestRevision: 1.0.0
+:latestRevision: 2.0.0
 
 This plugin initialize an ESCROW package. This is a zip file of the root project.
 It is possible to exclude files and directories additional for the prepared default excludes.
 
-==== Usage
+== Usage
 To use the Gradle escrow plugin. include the following in your build script:
 
 [source,groovy,subs="attributes"]
@@ -20,10 +20,10 @@ escrow {
 This plugin can be applied only to the root project. It produces a zip package with all the sources and without
 Gradle wrapper directory, which will be published to the specified repository.
 
-==== Extension
+== Extension
 This plugin adds an extension *`escrow`* to the project.
 
-==== Properties
+=== Properties
 
 [cols="17%,17%,17%,68%", width="90%, options="header"]
 |===
@@ -50,7 +50,14 @@ This list can be manipulated with the following methods:
 |*exclude*    | `void` | String       | Add an additional exclude pattern to the exclude list.
 |*excludes*   | `void` | List<String> | Add all elements of the parameter list to the exclude list.
 |*excludes*| `void` | List<String> | Reset the default exclude list with the parameter list.
+|===
 
+== Tasks
+
+[cols="26%,33%,40%", width="99%, options="header"]
+|===
+| Task name                  | Class                              |Description
+| *escrowZip* | `org.gradle.api.tasks.bundling.Zip` | Creates an escrow source package from project.
 |===
 
 == License
