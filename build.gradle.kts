@@ -24,7 +24,7 @@ plugins {
     `java-gradle-plugin`
     groovy
 
-    kotlin("jvm") version "1.7.10"
+    kotlin("jvm") version "1.9.21"
 
     // test coverage
     jacoco
@@ -38,88 +38,85 @@ plugins {
     // artifact signing - necessary on Maven Central
     signing
 
-    // intershop version plugin
-    id("com.intershop.gradle.scmversion") version "6.2.0"
-
     // plugin for documentation
     id("org.asciidoctor.jvm.convert") version "3.3.2"
 
     // documentation
-    id("org.jetbrains.dokka") version "1.5.0"
-
-    // code analysis for kotlin
-    id("io.gitlab.arturbosch.detekt") version "1.18.0"
+    id("org.jetbrains.dokka") version "1.9.10"
 
     // plugin for publishing to Gradle Portal
-    id("com.gradle.plugin-publish") version "1.0.0"
-}
-
-scm {
-    version.initialVersion = "1.0.0"
+    id("com.gradle.plugin-publish") version "1.2.1"
 }
 
 group = "com.intershop.gradle.escrow"
 description = "Intershop Gradle Escrow Plugin"
-version = scm.version.version
+// apply gradle property 'projectVersion' to project.version, default to 'LOCAL'
+val projectVersion : String? by project
+version = projectVersion ?: "LOCAL"
 
 val sonatypeUsername: String? by project
 val sonatypePassword: String? by project
 
-pluginBundle {
-    val pluginURL = "https://github.com/IntershopCommunicationsAG/${project.name}"
-    website = pluginURL
-    vcsUrl = pluginURL
-    tags = listOf("intershop", "build", "escow", "packaging")
-    pluginTags = mapOf(
-        "escrowPlugin" to listOf("escrow", "release")
-    )
+repositories {
+    gradlePluginPortal()
+    mavenCentral()
+    mavenLocal()
 }
 
+val pluginUrl = "https://github.com/IntershopCommunicationsAG/${project.name}"
 gradlePlugin {
+    website = pluginUrl
+    vcsUrl = pluginUrl
     plugins {
         create("escrowPlugin") {
             id = "com.intershop.gradle.escrow"
             implementationClass = "com.intershop.gradle.escrow.EscrowPlugin"
             displayName = "Plugin for escrow package creation"
             description = "This plugin provides a configuration for ESCROW packaging."
+            tags = listOf("intershop", "build", "escrow", "packaging", "release")
         }
     }
 }
 
 java {
+    withJavadocJar()
+    withSourcesJar()
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(8))
-        vendor.set(JvmVendorSpec.ADOPTIUM)
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 
 // set correct project status
 if (project.version.toString().endsWith("-SNAPSHOT")) {
-    status = "snapshot'"
+    status = "snapshot"
 }
 
-detekt {
-    source = files("src/main/kotlin")
-    config = files("detekt.yml")
+testing {
+    suites.withType<JvmTestSuite> {
+        useSpock()
+        dependencies {
+            implementation("com.intershop.gradle.test:test-gradle-plugin:5.0.1")
+            implementation(gradleTestKit())
+        }
+
+        targets {
+            all {
+                testTask.configure {
+                    systemProperty("intershop.gradle.versions", "8.5")
+                    testLogging {
+                        showStandardStreams = true
+                    }
+                }
+            }
+        }
+    }
 }
 
 tasks {
-    withType<Test>().configureEach {
-        systemProperty("intershop.gradle.versions", "7.2,7.5.1")
-
-        testLogging {
-            showStandardStreams = true
-        }
-
-        useJUnitPlatform()
-
-        dependsOn("jar")
-    }
-
-    register<Copy>("copyAsciiDoc") {
+    val copyAsciiDocTask = register<Copy>("copyAsciiDoc") {
         includeEmptyDirs = false
 
-        val outputDir = file("$buildDir/tmp/asciidoctorSrc")
+        val outputDir = project.layout.buildDirectory.dir("tmp/asciidoctorSrc")
         val inputFiles = fileTree(rootDir) {
             include("**/*.asciidoc")
             exclude("build/**")
@@ -129,7 +126,7 @@ tasks {
         outputs.dir( outputDir )
 
         doFirst {
-            outputDir.mkdir()
+            outputDir.get().asFile.mkdir()
         }
 
         from(inputFiles)
@@ -137,19 +134,24 @@ tasks {
     }
 
     withType<AsciidoctorTask> {
-        dependsOn("copyAsciiDoc")
-
-        setSourceDir(file("$buildDir/tmp/asciidoctorSrc"))
-        sources(delegateClosureOf<PatternSet> {
-            include("README.asciidoc")
+        dependsOn(copyAsciiDocTask)
+        sourceDirProperty.set(project.provider<Directory>{
+            val dir = project.objects.directoryProperty()
+            dir.set(copyAsciiDocTask.get().outputs.files.first())
+            dir.get()
         })
+        sources {
+            include("README.asciidoc")
+        }
 
         outputOptions {
             setBackends(listOf("html5", "docbook"))
         }
 
-        options = mapOf( "doctype" to "article",
-            "ruby"    to "erubis")
+        options = mapOf(
+                "doctype" to "article",
+                "ruby"    to "erubis"
+        )
         attributes = mapOf(
             "latestRevision"        to  project.version,
             "toc"                   to "left",
@@ -159,7 +161,8 @@ tasks {
             "setanchors"            to "true",
             "idprefix"              to "asciidoc",
             "idseparator"           to "-",
-            "docinfo1"              to "true")
+            "docinfo1"              to "true"
+        )
     }
 
     withType<JacocoReport> {
@@ -167,21 +170,19 @@ tasks {
             xml.required.set(true)
             html.required.set(true)
 
-            html.outputLocation.set( File(project.buildDir, "jacocoHtml") )
+            html.outputLocation.set( project.layout.buildDirectory.dir("jacocoHtml") )
         }
 
         val jacocoTestReport by tasks
-        jacocoTestReport.dependsOn("test")
+        jacocoTestReport.dependsOn(test)
     }
 
-    getByName("jar").dependsOn("asciidoctor")
-
-    withType<KotlinCompile>  {
-        kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8.toString()
+    jar.configure {
+        dependsOn(asciidoctor)
     }
 
     dokkaJavadoc.configure {
-        outputDirectory.set(buildDir.resolve("dokka"))
+        outputDirectory.set(project.layout.buildDirectory.dir("dokka"))
     }
 
     withType<Sign> {
@@ -195,7 +196,7 @@ tasks {
     }
 
     afterEvaluate {
-        getByName<Jar>("javadocJar") {
+        named<Jar>("javadocJar") {
             dependsOn(dokkaJavadoc)
             from(dokkaJavadoc)
         }
@@ -207,18 +208,18 @@ publishing {
         create("intershopMvn", MavenPublication::class.java) {
 
             from(components["java"])
-            artifact(File(buildDir, "docs/asciidoc/html5/README.html")) {
+            artifact(project.layout.buildDirectory.file("docs/asciidoc/html5/README.html")) {
                 classifier = "reference"
             }
 
-            artifact(File(buildDir, "docs/asciidoc/docbook/README.xml")) {
+            artifact(project.layout.buildDirectory.file("docs/asciidoc/docbook/README.xml")) {
                 classifier = "docbook"
             }
 
             pom {
                 name.set(project.name)
                 description.set(project.description)
-                url.set("https://github.com/IntershopCommunicationsAG/${project.name}")
+                url.set(pluginUrl)
                 licenses {
                     license {
                         name.set("The Apache License, Version 2.0")
@@ -240,7 +241,7 @@ publishing {
                 scm {
                     connection.set("git@github.com:IntershopCommunicationsAG/${project.name}.git")
                     developerConnection.set("git@github.com:IntershopCommunicationsAG/${project.name}.git")
-                    url.set("https://github.com/IntershopCommunicationsAG/${project.name}")
+                    url.set(pluginUrl)
                 }
             }
         }
@@ -265,16 +266,5 @@ signing {
 
 dependencies {
     implementation(gradleApi())
-    implementation(localGroovy())
-
-    testImplementation("com.intershop.gradle.test:test-gradle-plugin:4.1.2")
-    testImplementation(gradleTestKit())
+    implementation(gradleKotlinDsl())
 }
-
-repositories {
-    mavenCentral()
-    maven {
-        url = uri("https://plugins.gradle.org/m2/")
-    }
-}
-
