@@ -1,5 +1,5 @@
 = Escrow Package Plugin
-:latestRevision: 2.0.0
+:latestRevision: 3.0.0
 
 This plugin initialize an ESCROW package. This is a zip file of the root project.
 It is possible to exclude files and directories additional for the prepared default excludes.
